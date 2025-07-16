@@ -39,6 +39,9 @@ node_modules/
 .Spotlight-V100
 .Trashes
 __MACOSX
+.DS_Store?
+ehthumbs.db
+Thumbs.db
 
 # User's provided base ignores
 # Prerequisites
