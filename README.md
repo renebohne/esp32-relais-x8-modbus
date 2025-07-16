@@ -4,6 +4,8 @@ This firmware turns an ESP32 board with an 8-relay module into a robust, network
 
 The project is built using PlatformIO and is designed for reliability and easy integration with standard SCADA, HMI, or other industrial control systems.
 
+This is the board that I use: LC-Relay-ESP-32-8R-D5 https://www.amazon.de/dp/B0CZDQ9QRG
+
 ## Features
 
 - **Modbus TCP Server:** Runs a standard Modbus TCP server on port 502.
