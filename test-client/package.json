@@ -1,0 +1,15 @@
+{
+  "name": "modbus-relay-tester",
+  "version": "1.0.0",
+  "description": "A Node.js CLI to test an ESP32 Modbus TCP relay server.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Gemini",
+  "license": "ISC",
+  "dependencies": {
+    "jsmodbus": "^4.0.6"
+  }
+}
