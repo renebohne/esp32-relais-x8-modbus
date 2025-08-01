@@ -3,7 +3,7 @@ import net from 'net';
 import readline from 'readline';
 
 // --- Configuration ---
-const HOST = '192.168.20.119'; // <-- IMPORTANT: Change to your ESP32's IP address
+const HOST = '192.168.20.136'; // <-- IMPORTANT: Change to your ESP32's IP address
 const PORT = 502;
 const UNIT_ID = 1;
 const TIMEOUT = 5000; // 5 seconds
@@ -14,7 +14,7 @@ const HREG_DURATION_START_ADDR = 100;
 const COIL_ARM_RELAY_START_ADDR = 20;
 const COIL_GLOBAL_TRIGGER_ADDR = 30;
 const COIL_ANY_RELAY_ON_ADDR = 40;
-const RELAY_COUNT = 8;
+const RELAY_COUNT = 6;
 
 // Device Information Registers
 const HREG_FIRMWARE_VERSION_ADDR = 500;

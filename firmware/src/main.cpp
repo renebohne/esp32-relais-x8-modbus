@@ -2,29 +2,41 @@
 #include <WiFi.h>
 #include <ModbusIP_ESP8266.h>
 
-#define LED_PIN 2
+// --- Board Selection ---
+// This is controlled by the build_flags in platformio.ini
+#if defined(BOARD_8_RELAY)
+    // --- Configuration for the original 8-Relay Board ---
+    #define LED_PIN 2
+    const int relayCount = 8;
+    const int relayPins[relayCount] = {13, 12, 14, 27, 26, 25, 33, 32};
+    const char* DEVICE_NAME = "ESP32 8-Relay Board";
+#elif defined(BOARD_6_RELAY)
+    // --- Configuration for the XIAO ESP32-C6 6-Relay Board ---
+    const int relayCount = 6;
+    const int relayPins[relayCount] = {2, 21, 1, 0, 19, 18};
+    const char* DEVICE_NAME = "XIAO 6-Relay Board";
+#else
+    #error "No board specified! Please define BOARD_8_RELAY or BOARD_6_RELAY in platformio.ini"
+#endif
+
 
 // --- WiFi Credentials ---
+// IMPORTANT: Enter your network credentials here
 const char* ssid = "YOUR_SSID";
 const char* password = "YOUR_PASSWORD";
 
 
 // --- Device Information (Read-Only) ---
-const uint16_t FIRMWARE_VERSION = 101; // Represents v1.0.1
-const char* DEVICE_NAME = "ESP32 Relay Board";
+const uint16_t FIRMWARE_VERSION = 102; // Represents v1.0.2
 
 // --- Modbus Object ---
 ModbusIP mb;
 
-// --- Relay & Motor Control Setup ---
-const int relayCount = 8;
-const int relayPins[relayCount] = {13, 12, 14, 27, 26, 25, 33, 32};
-
 // --- State-holding variables for timed run logic ---
-unsigned long motorStartTimes[relayCount] = {0};
-uint32_t motorRunDurations[relayCount] = {0};
-bool motorInTimedRun[relayCount] = {false};
-bool relayIsArmed[relayCount] = {false};
+unsigned long motorStartTimes[8] = {0}; // Always use 8 for Modbus compatibility
+uint32_t motorRunDurations[8] = {0};
+bool motorInTimedRun[8] = {false};
+bool relayIsArmed[8] = {false};
 
 // Modbus addresses
 const int COIL_MANUAL_START_ADDR = 0;
@@ -32,7 +44,7 @@ const int HREG_DURATION_START_ADDR = 100;
 const int COIL_ARM_RELAY_START_ADDR = 20;
 const int COIL_GLOBAL_TRIGGER_ADDR = 30;
 const int COIL_ANY_RELAY_ON_ADDR = 40;
-const int COIL_EMERGENCY_STOP_ADDR = 60; // *** NEW: E-Stop Trigger Coil ***
+const int COIL_EMERGENCY_STOP_ADDR = 60;
 
 // Device Information Registers
 const int HREG_FIRMWARE_VERSION_ADDR = 500;
@@ -42,7 +54,10 @@ const int HREG_SERIAL_NUMBER_START_ADDR = 511;
 
 void setup() {
   Serial.begin(115200);
+  
+#if defined(LED_PIN)
   pinMode(LED_PIN, OUTPUT);
+#endif
 
   // Initialize Relay Pins
   for (int i = 0; i < relayCount; i++) {
@@ -58,6 +73,8 @@ void setup() {
     Serial.print(".");
   }
   Serial.println("\nConnected!");
+  Serial.print("Board: ");
+  Serial.println(DEVICE_NAME);
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
   Serial.print("MAC Address: ");
@@ -68,14 +85,15 @@ void setup() {
   mb.server();
 
   // --- Add Control & Status Registers ---
-  for (int i = 0; i < relayCount; i++) {
+  // We will always register all 8 coils/hregs to maintain compatibility with clients
+  for (int i = 0; i < 8; i++) {
     mb.addCoil(COIL_MANUAL_START_ADDR + i);
     mb.addHreg(HREG_DURATION_START_ADDR + i);
     mb.addCoil(COIL_ARM_RELAY_START_ADDR + i);
   }
   mb.addCoil(COIL_GLOBAL_TRIGGER_ADDR);
   mb.addCoil(COIL_ANY_RELAY_ON_ADDR);
-  mb.addCoil(COIL_EMERGENCY_STOP_ADDR); // *** NEW: Add E-Stop coil ***
+  mb.addCoil(COIL_EMERGENCY_STOP_ADDR);
 
   // --- Add and Populate Device Info Registers ---
   mb.addHreg(HREG_FIRMWARE_VERSION_ADDR, FIRMWARE_VERSION);
@@ -111,10 +129,11 @@ void loop() {
 
   // --- 0. Check for Emergency Stop (HIGHEST PRIORITY) ---
   if (mb.Coil(COIL_EMERGENCY_STOP_ADDR)) {
-    for (int i = 0; i < relayCount; i++) {
-        // Immediately turn off all physical relays
+    for (int i = 0; i < relayCount; i++) { // Loop only through the available relays
         digitalWrite(relayPins[i], LOW);
-        // Reset all Modbus states and internal logic variables
+    }
+    // Also reset the state for all 8 coils/variables in the modbus map for consistency
+    for (int i=0; i < 8; i++) {
         mb.Coil(COIL_MANUAL_START_ADDR + i, 0);
         mb.Hreg(HREG_DURATION_START_ADDR + i, 0);
         motorInTimedRun[i] = false;
@@ -128,7 +147,7 @@ void loop() {
 
 
   // --- 1. Check for Arming Commands ---
-  for (int i = 0; i < relayCount; i++) {
+  for (int i = 0; i < relayCount; i++) { // Loop only through the available relays
     if (mb.Coil(COIL_ARM_RELAY_START_ADDR + i)) {
       relayIsArmed[i] = true;
       mb.Coil(COIL_ARM_RELAY_START_ADDR + i, 0);
@@ -137,7 +156,7 @@ void loop() {
 
   // --- 2. Check for the Global Trigger Command ---
   if (mb.Coil(COIL_GLOBAL_TRIGGER_ADDR)) {
-    for (int i = 0; i < relayCount; i++) {
+    for (int i = 0; i < relayCount; i++) { // Loop only through the available relays
       if (relayIsArmed[i] && !motorInTimedRun[i]) {
         motorInTimedRun[i] = true;
         motorStartTimes[i] = millis();
@@ -152,7 +171,7 @@ void loop() {
   }
 
   // --- 3. Manage Active Timed Runs ---
-  for (int i = 0; i < relayCount; i++) {
+  for (int i = 0; i < relayCount; i++) { // Loop only through the available relays
     if (motorInTimedRun[i]) {
       if (millis() - motorStartTimes[i] >= motorRunDurations[i]) {
         digitalWrite(relayPins[i], LOW);
@@ -169,14 +188,17 @@ void loop() {
 
   // --- 5. Update the Global "Any Relay On" Status Coil ---
   bool anyRelayActive = false;
-  for (int i = 0; i < relayCount; i++) {
+  for (int i = 0; i < relayCount; i++) { // Loop only through the available relays
     if (digitalRead(relayPins[i]) == HIGH) {
       anyRelayActive = true;
       break;
     }
   }
   mb.Coil(COIL_ANY_RELAY_ON_ADDR, anyRelayActive);
+
+#if defined(LED_PIN)
   digitalWrite(LED_PIN, anyRelayActive);
+#endif
 
   delay(10);
 }
