@@ -85,3 +85,5 @@ Thumbs.db
 
 # debug information files
 *.dwo
+firmware/.vscode/extensions.json
+test-client/package-lock.json
